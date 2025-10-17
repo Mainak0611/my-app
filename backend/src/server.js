@@ -1,28 +1,35 @@
-// backend/src/server.js
+// backend/src/server.js (FINAL Modular Setup)
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import db from "./config/db.js";
-import paymentRoutes from "./routes/paymentRoutes.js";
+// 🛑 UPDATED: Import the global route registration function
+import registerRoutes from "./routes.js"; 
 
-dotenv.config();
+dotenv.config(); 
 const app = express();
 
-// ✅ Configure CORS properly once
+// 1. CORS Middleware 
 app.use(
   cors({
-    origin: "http://localhost:5173", // your React app
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: "http://localhost:5173",
+    // Ensure PATCH method is included
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   })
 );
 
-// ✅ Body parser
 app.use(express.json());
 
-// ✅ Routes
-app.use("/api/payments", paymentRoutes);
+// 2. Define Routes using the global route registration
+// 🛑 NEW: Call the function to register all module routes 🛑
+registerRoutes(app); 
 
-// ✅ Start server
-const PORT = process.env.PORT || 5000;
+// 3. Fallback/Test Route (Optional - Keep for general server check)
+app.get('/', (req, res) => {
+    res.send("Backend server is running.");
+});
+
+// 4. Start server (Use the port defined by .env or 5001)
+const PORT = process.env.PORT || 5001; 
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
