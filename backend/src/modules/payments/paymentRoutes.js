@@ -1,54 +1,36 @@
-// backend/src/routes/paymentRoutes.js (FINAL with Dedicated Status Update Route)
+// backend/src/modules/payments/paymentRoutes.js
 
-import express from "express";
-import multer from "multer";
+import express from 'express';
+// 🛑 THIS IS THE CORRECT PATH BASED ON YOUR FOLDER STRUCTURE 🛑
+import { protect } from '../../middleware/authMiddleware.js'; 
+
 import { 
     getPayments, 
     uploadCSV, 
     deleteAllPayments, 
-    addTrackingEntry,     
-    getTrackingEntries,
-    // 🛑 NEW IMPORT 🛑
+    addTrackingEntry, 
+    getTrackingEntries, 
     updatePaymentStatus 
-} from "./paymentController.js"; 
+} from './paymentController.js';
+
+import { upload } from '../../config/multerConfig.js'; 
 
 const router = express.Router();
 
-// Configure Multer for file storage (Config is fine)
-const upload = multer({ 
-  dest: 'tmp/csv/', 
-  fileFilter: (req, file, cb) => {
-    const allowedMimes = [
-      'text/csv', 
-      'application/vnd.ms-excel', 
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    ];
+// 1. GET Payments (READ) - REQUIRES AUTHENTICATION
+router.get('/', protect, getPayments);
 
-    if (!allowedMimes.includes(file.mimetype)) {
-      return cb(new Error('Only CSV and XLSX files are allowed!'), false);
-    }
-    cb(null, true);
-  }
-});
+// 2. POST Upload (CREATE) - REQUIRES AUTHENTICATION
+router.post('/upload', protect, upload.single('csvFile'), uploadCSV);
 
-// GET /api/payments 
-router.get("/", getPayments);
+// 3. DELETE All (DELETE) - REQUIRES AUTHENTICATION
+router.delete('/', protect, deleteAllPayments);
 
-// DELETE /api/payments
-router.delete("/", deleteAllPayments);
+// 4. Tracking Routes - REQUIRES AUTHENTICATION
+router.post('/tracking/:paymentId', protect, addTrackingEntry);
+router.get('/tracking/:paymentId', protect, getTrackingEntries);
 
-// POST /api/payments/upload
-router.post("/upload", upload.single('csvFile'), uploadCSV);
-
-// 🛑 NEW TRACKING ROUTES 🛑
-// POST /api/payments/tracking/:paymentId -> Add a new tracking entry
-router.post('/tracking/:paymentId', addTrackingEntry);
-
-// GET /api/payments/tracking/:paymentId -> Get history of tracking entries
-router.get('/tracking/:paymentId', getTrackingEntries);
-
-// 🛑 NEW ROUTE FOR DEDICATED STATUS UPDATE 🛑
-// PATCH /api/payments/:id/status
-router.patch('/:id/status', updatePaymentStatus); 
+// 5. Status Update - REQUIRES AUTHENTICATION
+router.patch('/:id/status', protect, updatePaymentStatus);
 
 export default router;
