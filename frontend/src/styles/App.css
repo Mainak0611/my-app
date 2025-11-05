@@ -2,20 +2,18 @@
 
 /* Global Styles (Keep if necessary, typically in index.css) */
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  margin: 0;
+  padding: 0;
 }
 
 /* Base Styles */
 .payment-container {
   width: 100%;
-  min-height: 100vh;
-  padding: 2rem;
+  min-height: calc(100vh - 70px);
+  padding: 30px;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   color: #333;
-  background-color: #fff;
+  background-color: #f8f9fa;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -23,9 +21,10 @@
 
 .payment-title {
   text-align: center;
-  margin-bottom: 20px;
-  color: #4a90e2;
+  margin-bottom: 30px;
+  color: #2c3e50;
   font-size: 2rem;
+  font-weight: 600;
 }
 
 .payment-loading {
@@ -44,8 +43,9 @@
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1400px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  background-color: white;
 }
 
 .upload-input {
@@ -75,7 +75,7 @@
   margin-bottom: 20px;
   font-weight: bold;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1400px;
   text-align: center;
 }
 
@@ -94,14 +94,26 @@
   color: #004085;
 }
 
+/* Filter Controls */
+.filter-controls {
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 25px;
+  width: 100%;
+  max-width: 1400px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
 /* Table Styles */
 .table-wrapper {
   overflow-x: auto;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   width: 100%;
-  max-width: 1200px;
+  max-width: 1400px;
   margin-top: 20px;
+  background-color: white;
 }
 
 .payment-table {

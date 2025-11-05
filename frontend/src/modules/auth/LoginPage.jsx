@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom'; // 🛑 Ensure Link is imported 🛑
 import '../../styles/AuthForm.css';
 
 const LoginPage = () => {
-    const [email, setEmail] = useState('');
+    const [userId, setUserId] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
 
@@ -13,7 +13,7 @@ const LoginPage = () => {
         e.preventDefault();
         setError('');
         try {
-            const res = await api.post('/api/users/login', { email, password });
+            const res = await api.post('/api/users/login', { userId, password });
             
             // Store the token and user ID
             localStorage.setItem('userToken', res.data.token);
@@ -22,7 +22,10 @@ const LoginPage = () => {
             // Redirect to the main application page
             window.location.href = '/'; 
         } catch (err) {
-            setError(err.response?.data?.error || 'Login failed. Check credentials.');
+            console.error('Login error:', err);
+            console.error('Error response:', err.response);
+            const errorMsg = err.response?.data?.error || err.message || 'Login failed. Check credentials.';
+            setError(errorMsg);
         }
     };
 
@@ -31,10 +34,10 @@ const LoginPage = () => {
             <h2>User Login</h2>
             <form onSubmit={handleSubmit} className="auth-form">
                 <input 
-                    type="email" 
-                    placeholder="Email" 
-                    value={email} 
-                    onChange={(e) => setEmail(e.target.value)} 
+                    type="text" 
+                    placeholder="User ID" 
+                    value={userId} 
+                    onChange={(e) => setUserId(e.target.value)} 
                     required 
                 />
                 <input 

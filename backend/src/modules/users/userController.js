@@ -9,10 +9,27 @@ const SECRET_KEY = process.env.JWT_SECRET || 'your_secret_key';
 
 // --- Database Helper Functions (Using real SQL) ---
 
-// Helper function to query the database and return a user object
+// Helper function to query the database and return a user object by userId
+const findUserByUserId = (userId) => {
+    return new Promise((resolve, reject) => {
+        const sql = 'SELECT id, userId, email, password FROM users WHERE userId = ?';
+        db.query(sql, [userId], (err, results) => {
+            if (err) return reject(err);
+            // If user found, resolve with the user object (first result)
+            if (results.length > 0) {
+                resolve(results[0]);
+            } else {
+                // If user not found, resolve with null
+                resolve(null);
+            }
+        });
+    });
+};
+
+// Helper function to query the database and return a user object by email
 const findUserByEmail = (email) => {
     return new Promise((resolve, reject) => {
-        const sql = 'SELECT id, email, password FROM users WHERE email = ?';
+        const sql = 'SELECT id, userId, email, password FROM users WHERE email = ?';
         db.query(sql, [email], (err, results) => {
             if (err) return reject(err);
             // If user found, resolve with the user object (first result)
@@ -27,10 +44,10 @@ const findUserByEmail = (email) => {
 };
 
 // Helper function to insert a new user into the database
-const createUser = (email, hashedPassword) => {
+const createUser = (userId, email, hashedPassword) => {
     return new Promise((resolve, reject) => {
-        const sql = 'INSERT INTO users (email, password) VALUES (?, ?)';
-        db.query(sql, [email, hashedPassword], (err, result) => {
+        const sql = 'INSERT INTO users (userId, email, password) VALUES (?, ?, ?)';
+        db.query(sql, [userId, email, hashedPassword], (err, result) => {
             if (err) return reject(err);
             // Resolve with the ID of the newly inserted user
             resolve(result.insertId);
@@ -42,17 +59,21 @@ const createUser = (email, hashedPassword) => {
 
 // [1] User Registration
 export const registerUser = async (req, res) => {
-    const { email, password } = req.body;
+    const { userId, email, password } = req.body;
 
     // Basic input validation
-    if (!email || !password || password.length < 6) {
-        return res.status(400).json({ error: 'Please provide a valid email and a password of at least 6 characters.' });
+    if (!userId || !email || !password || password.length < 6) {
+        return res.status(400).json({ error: 'Please provide a valid User ID, email, and a password of at least 6 characters.' });
     }
 
     try {
-        // Check if user already exists
+        // Check if user already exists by userId or email
+        if (await findUserByUserId(userId)) {
+            return res.status(400).json({ error: 'User ID already exists.' });
+        }
+        
         if (await findUserByEmail(email)) {
-            return res.status(400).json({ error: 'User already exists with that email.' });
+            return res.status(400).json({ error: 'Email already exists.' });
         }
 
         // Hash the password securely
@@ -60,17 +81,15 @@ export const registerUser = async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, salt);
         
         // Insert user into DB
-        const userId = await createUser(email, hashedPassword); 
+        const userIdFromDb = await createUser(userId, email, hashedPassword); 
 
-        // Generate a token for immediate login (optional, but convenient)
-        const token = jwt.sign({ id: userId, email: email }, SECRET_KEY, {
-            expiresIn: '24h', 
-        });
+        // Generate a token that never expires (no expiresIn option)
+        const token = jwt.sign({ id: userIdFromDb, userId: userId, email: email }, SECRET_KEY);
 
         res.status(201).json({ 
             message: 'User registered successfully and logged in.', 
             token,
-            userId
+            userId: userIdFromDb
         });
     } catch (error) {
         console.error("Registration error:", error);
@@ -80,25 +99,23 @@ export const registerUser = async (req, res) => {
 
 // [2] User Login
 export const loginUser = async (req, res) => {
-    const { email, password } = req.body;
+    const { userId, password } = req.body;
     
     // Basic input validation
-    if (!email || !password) {
-        return res.status(400).json({ error: 'Please provide both email and password.' });
+    if (!userId || !password) {
+        return res.status(400).json({ error: 'Please provide both User ID and password.' });
     }
 
     try {
-        const user = await findUserByEmail(email);
+        const user = await findUserByUserId(userId);
 
         // Check if user exists AND if the password matches the hash
         if (!user || !(await bcrypt.compare(password, user.password))) {
-            return res.status(401).json({ error: 'Invalid email or password.' });
+            return res.status(401).json({ error: 'Invalid User ID or password.' });
         }
 
-        // Generate JWT token containing user ID
-        const token = jwt.sign({ id: user.id, email: user.email }, SECRET_KEY, {
-            expiresIn: '24h', 
-        });
+        // Generate JWT token that never expires (no expiresIn option)
+        const token = jwt.sign({ id: user.id, userId: user.userId, email: user.email }, SECRET_KEY);
 
         // Send token to the client
         res.status(200).json({ 

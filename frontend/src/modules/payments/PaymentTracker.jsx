@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import api from "../../lib/api";
-import '../../styles/App.css'; // Assuming you move App.css to src/styles/
+import '../../styles/PaymentTracker.css';
 import { 
     formatDateForDisplay, 
     getStatusDisplay 
@@ -43,17 +43,6 @@ function PaymentTracker() {
     "Latest Remark",       
     "Action"
   ];
-
-  // --- LOGOUT FUNCTION ---
-  const handleLogout = () => {
-      // 1. Clear authentication data
-      localStorage.removeItem('userToken');
-      localStorage.removeItem('userId');
-      
-      // 2. Redirect to the login page (forces re-evaluation of App.jsx)
-      window.location.href = '/login'; 
-  };
-
 
   // Function to fetch payments
   const fetchPayments = async () => {
@@ -273,32 +262,8 @@ function PaymentTracker() {
 
 
   return (
-    // Used a wrapper div to contain the title and logout button
-    <div style={{ position: 'relative', maxWidth: '1400px', margin: '0 auto', padding: '20px' }}>
-      
-      {/* 🛑 LOGOUT BUTTON 🛑 */}
-      <button 
-        onClick={handleLogout} 
-        style={{
-          position: 'absolute',
-          top: '20px',
-          right: '20px',
-          padding: '10px 15px',
-          backgroundColor: '#dc3545', // Red color for danger/logout
-          color: 'white',
-          border: 'none',
-          borderRadius: '5px',
-          cursor: 'pointer',
-          fontWeight: 'bold',
-          zIndex: 100 // Ensure it's on top
-        }}
-        aria-label="Logout"
-      >
-        Logout
-      </button>
-
-      <div className="payment-container">
-        <h1 className="payment-title">Payment Records</h1>
+    <div className="payment-container">
+      <h1 className="payment-title">Payment Records</h1>
         
         {/* Upload & Delete Form */}
         <form onSubmit={handleUpload} className="upload-form">
@@ -324,77 +289,33 @@ function PaymentTracker() {
           </button>
         </form>
         
-        {/* MODIFIED: SEARCH AND FILTER CONTROLS using inline styles */}
-        <div 
-          className="filter-controls" 
-          style={{
-            display: 'flex', 
-            gap: '25px', 
-            alignItems: 'center', 
-            marginBottom: '25px', 
-            padding: '20px', 
-            maxWidth: '1200px', 
-            width: '100%',
-            border: '1px solid #d0d0d0', 
-            borderRadius: '8px',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-            backgroundColor: '#f9f9f9'
-          }}
-        >
+        {/* MODIFIED: SEARCH AND FILTER CONTROLS */}
+        <div className="filter-controls">
           <input
             type="text"
             placeholder="Search by Party or Contact No..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              flexGrow: 1, 
-              padding: '12px', 
-              fontSize: '1.1rem', 
-              border: '1px solid #a0a0a0',
-              borderRadius: '4px',
-            }}
           />
           <input
             type="date"
             value={filterDate}
             onChange={(e) => setFilterDate(e.target.value)}
-            style={{
-              padding: '12px', 
-              fontSize: '1.1rem', 
-              border: '1px solid #a0a0a0',
-              borderRadius: '4px',
-              maxWidth: '180px',
-            }}
           />
           <button 
               onClick={() => setFilterDate('')} 
               className="upload-button"
               disabled={!filterDate}
-              style={{
-                  backgroundColor: '#007bff', 
-                  padding: '12px 20px', 
-                  fontSize: '1rem', 
-                  transition: 'background-color 0.3s',
-                  ...(filterDate ? {} : {backgroundColor: '#cccccc', cursor: 'not-allowed'})
-              }}
           >
               Clear Date Filter
           </button>
           
           {/* Sort by Date Controls */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <label style={{ fontWeight: 'bold', fontSize: '1rem', whiteSpace: 'nowrap' }}>Sort by Date:</label>
+            <label>Sort by Date:</label>
             <select
               value={sortOrder}
               onChange={(e) => setSortOrder(e.target.value)}
-              style={{
-                padding: '12px',
-                fontSize: '1.1rem',
-                border: '1px solid #a0a0a0',
-                borderRadius: '4px',
-                backgroundColor: '#fff',
-                cursor: 'pointer'
-              }}
             >
               <option value="none">Default (No Sort)</option>
               <option value="asc">Oldest First</option>
@@ -458,9 +379,9 @@ function PaymentTracker() {
                                   style={{
                                       backgroundColor: statusData.bgColor,
                                       color: statusData.color || 'white', 
-                                      fontWeight: 'bold',
+                                      fontWeight: '700',
                                       textAlign: 'center',
-                                      padding: '12px 8px' 
+                                      padding: '16px 8px'
                                   }}
                               >
                                   {statusData.text}
@@ -508,7 +429,7 @@ function PaymentTracker() {
                 {/* Display message if no results after filtering */}
                 {filteredPayments.length === 0 && payments.length > 0 && (
                   <tr>
-                      <td colSpan={ALL_HEADERS.length} className="table-td" style={{textAlign: 'center', fontWeight: 'bold'}}>
+                      <td colSpan={ALL_HEADERS.length} className="table-td" style={{textAlign: 'center', fontWeight: '600', padding: '30px', fontSize: '15px', color: '#7f8c8d'}}>
                           No records match the current filters.
                       </td>
                   </tr>
@@ -526,13 +447,12 @@ function PaymentTracker() {
               <button className="modal-close" onClick={closeManageModal}>&times;</button>
               
               {/* Form to Add New Entry */}
-              <form onSubmit={handleAddTrackingEntry} className="tracking-form" style={{flexWrap: 'wrap'}}>
+              <form onSubmit={handleAddTrackingEntry} className="tracking-form">
                   <input 
                       type="date" 
                       value={newDate} 
                       onChange={(e) => setNewDate(e.target.value)} 
                       required={!newRemark}
-                      style={{flexGrow: 1}}
                   />
                   <input 
                       type="text" 
@@ -540,9 +460,8 @@ function PaymentTracker() {
                       onChange={(e) => setNewRemark(e.target.value)} 
                       placeholder="Enter Remark (Optional)" 
                       required={!newDate}
-                      style={{flexGrow: 1}}
                   />
-                  <button type="submit" className="upload-button" style={{backgroundColor: '#4a90e2'}}>Add New Entry</button>
+                  <button type="submit" className="upload-button">Add New Entry</button>
               </form>
 
               {/* History List */}
@@ -554,7 +473,7 @@ function PaymentTracker() {
                   ) : (
                       <ul>
                           {trackingHistory.map((entry) => (
-                              <li key={entry.id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                              <li key={entry.id}>
                                   <div>
                                       <strong>Date:</strong> {formatDateForDisplay(entry.actual_payment_date)} 
                                       | <strong>Remark:</strong> {entry.remark || 'None'}
@@ -564,17 +483,8 @@ function PaymentTracker() {
                                   
                                   {/* Status Selector in History Item */}
                                   <select 
-                                      // When the status changes, we call the API to update the parent payment record
                                       onChange={(e) => handleUpdatePaymentStatus(e.target.value)}
-                                      // Display the current status of the main record
                                       value={payments.find(p => p.id === managePaymentId)?.payment_status || 'PENDING'}
-                                      style={{
-                                          padding: '5px', 
-                                          borderRadius: '4px',
-                                          border: '1px solid #ccc',
-                                          backgroundColor: '#fff',
-                                          fontWeight: 'bold'
-                                      }}
                                   >
                                       <option value="" disabled>Set Status</option>
                                       <option value="PARTIAL">Partial Payment Done</option>
@@ -591,8 +501,7 @@ function PaymentTracker() {
         )}
 
       </div>
-    </div>
   );
 }
 
-export default PaymentTracker; // Renamed export
+export default PaymentTracker;

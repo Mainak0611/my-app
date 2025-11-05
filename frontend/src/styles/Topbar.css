@@ -1,0 +1,137 @@
+/* frontend/src/styles/Topbar.css */
+
+.topbar {
+    height: 70px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 30px;
+    position: fixed;
+    top: 0;
+    left: 250px;
+    right: 0;
+    z-index: 999;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    transition: left 0.3s ease;
+}
+
+.sidebar.collapsed ~ .main-layout .topbar {
+    left: 70px;
+}
+
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.topbar-home-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.topbar-home-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+}
+
+.home-icon {
+    font-size: 18px;
+}
+
+.home-text {
+    font-weight: 600;
+}
+
+.topbar-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: white;
+    margin: 0;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.topbar-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 18px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 25px;
+    backdrop-filter: blur(10px);
+}
+
+.topbar-user-icon {
+    font-size: 20px;
+}
+
+.topbar-user-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+}
+
+.topbar-logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: rgba(231, 76, 60, 0.9);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.topbar-logout-btn:hover {
+    background: rgba(192, 57, 43, 1);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.logout-icon {
+    font-size: 16px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .topbar {
+        left: 70px;
+        padding: 0 15px;
+    }
+    
+    .topbar-title {
+        font-size: 18px;
+    }
+    
+    .home-text,
+    .topbar-user-name {
+        display: none;
+    }
+    
+    .topbar-home-btn,
+    .topbar-logout-btn {
+        padding: 10px;
+    }
+}

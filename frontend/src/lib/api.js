@@ -36,16 +36,14 @@ api.interceptors.response.use(
     (error) => {
         // If the server returns a 401 Unauthorized error (token expired/invalid)
         if (error.response && error.response.status === 401) {
-            console.warn("Session expired or token is invalid. Clearing credentials.");
+            console.warn("Session expired or token is invalid. Clearing credentials and redirecting to login.");
             
             // Clear credentials and force a logout/redirect to login
             localStorage.removeItem('userToken');
             localStorage.removeItem('userId');
             
-            // Redirect to login page
-            // Note: Use history.push('/login') if you have access to React Router's history, 
-            // but window.location.href works as a reliable fallback for full page refresh.
-            // window.location.href = '/login'; 
+            // Redirect to login page with a full page refresh
+            window.location.href = '/login'; 
         }
         return Promise.reject(error);
     }
