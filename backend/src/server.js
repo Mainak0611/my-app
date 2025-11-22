@@ -49,8 +49,6 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 // Ensure preflight (OPTIONS) requests are handled for all routes
-// This responds quickly to OPTIONS with the correct CORS headers when allowed.
-app.options("*", cors(corsOptions));
 
 // Body parser
 app.use(express.json());
