@@ -75,12 +75,15 @@ const Sidebar = () => {
 
                 /* Header */
                 .sidebar-header {
-                    height: 80px; /* Match Topbar height */
+                    height: 72px; /* Match Topbar height */
+                    min-height: 72px;
+                    max-height: 72px;
                     display: flex;
                     align-items: center;
                     justify-content: space-between;
                     padding: 0 20px;
                     border-bottom: 1px solid var(--sidebar-border);
+                    flex-shrink: 0;
                 }
 
                 .sidebar-logo {

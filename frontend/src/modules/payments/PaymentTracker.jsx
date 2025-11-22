@@ -210,8 +210,8 @@ function PaymentTracker() {
           --danger: #ef4444;
           --danger-hover: #dc2626;
           --border: #e2e8f0;
-          --highlight-bg: #f0fdf4;
-          --highlight-border: #bbf7d0;
+          --highlight-bg: #d1fae5;
+          --highlight-border: #86efac;
         }
         .dashboard-container {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -229,7 +229,7 @@ function PaymentTracker() {
           gap: 16px;
         }
         .page-title {
-          font-size: 28px;
+          font-size: 32px;
           font-weight: 800;
           color: var(--text-main);
           margin: 0;
@@ -264,7 +264,7 @@ function PaymentTracker() {
         .btn {
           display: inline-flex; align-items: center; gap: 8px;
           padding: 10px 16px; border-radius: 8px;
-          font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s;
+          font-size: 15px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s;
         }
         .btn-primary { background: var(--primary); color: white; }
         .btn-primary:hover { background: var(--primary-hover); }
@@ -284,26 +284,26 @@ function PaymentTracker() {
           align-items: end;
         }
         .form-group { display: flex; flex-direction: column; gap: 6px; }
-        .form-label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
+        .form-label { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
         .form-input, .form-select {
           padding: 10px; border: 1px solid var(--border); border-radius: 6px;
-          font-size: 14px; width: 100%;
+          font-size: 15px; width: 100%;
         }
         .form-input:focus { outline: 2px solid var(--primary); border-color: transparent; }
 
         /* Messages */
-        .alert { padding: 12px; border-radius: 6px; font-size: 14px; margin-bottom: 16px; font-weight: 500; }
+        .alert { padding: 12px; border-radius: 6px; font-size: 15px; margin-bottom: 16px; font-weight: 500; }
         .alert.info { background: #eff6ff; color: #1d4ed8; border: 1px solid #dbeafe; }
         .alert.success { background: #ecfdf5; color: #047857; border: 1px solid #d1fae5; }
         .alert.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fee2e2; }
 
         /* Table */
         .table-container { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
-        .data-table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+        .data-table { width: 100%; border-collapse: collapse; font-size: 15px; text-align: left; }
         .data-table th { 
           background: #f8fafc; color: var(--text-muted); 
           font-weight: 600; padding: 12px 16px; 
-          text-transform: uppercase; font-size: 11px; letter-spacing: 0.05em;
+          text-transform: uppercase; font-size: 12px; letter-spacing: 0.05em;
           border-bottom: 1px solid var(--border);
         }
         .data-table td { padding: 14px 16px; border-bottom: 1px solid var(--border); color: var(--text-main); }
@@ -311,12 +311,12 @@ function PaymentTracker() {
         .data-table tr:hover { background: #f8fafc; }
         
         .highlight-row { background-color: var(--highlight-bg) !important; }
-        .highlight-row td { font-weight: 500; color: #064e3b; }
+        .highlight-row td { font-weight: 600; color: #064e3b; }
 
         /* Status Pills */
         .status-pill {
-          display: inline-block; padding: 4px 10px; border-radius: 20px;
-          font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+          display: inline-block; padding: 5px 12px; border-radius: 20px;
+          font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
         }
 
         /* Modal */
@@ -331,8 +331,8 @@ function PaymentTracker() {
           position: relative;
         }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-        .modal-title { font-size: 20px; font-weight: 700; margin: 0; }
-        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
+        .modal-title { font-size: 22px; font-weight: 700; margin: 0; }
+        .modal-close { background: none; border: none; font-size: 28px; cursor: pointer; color: var(--text-muted); }
         
         .tracking-form { display: flex; gap: 12px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
         .history-list { max-height: 300px; overflow-y: auto; }
@@ -340,8 +340,8 @@ function PaymentTracker() {
           padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px;
           display: flex; justify-content: space-between; align-items: flex-start;
         }
-        .history-meta { font-size: 13px; color: var(--text-muted); margin-top: 4px; }
-        .history-remark { font-weight: 500; color: var(--text-main); }
+        .history-meta { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+        .history-remark { font-weight: 500; color: var(--text-main); font-size: 15px; }
         
         /* Delete Modal Specifics */
         .delete-content { text-align: center; max-width: 400px; }
@@ -352,7 +352,7 @@ function PaymentTracker() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Payment Records</h1>
-          <p style={{color: 'var(--text-muted)', margin: '4px 0 0'}}>Manage, track and update all transaction records.</p>
+          <p style={{color: 'var(--text-muted)', margin: '4px 0 0', fontSize: '15px'}}>Manage, track and update all transaction records.</p>
         </div>
       </div>
 

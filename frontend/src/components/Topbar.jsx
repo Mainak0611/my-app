@@ -29,7 +29,7 @@ const Topbar = () => {
             {/* Internal CSS */}
             <style>{`
                 :root {
-                    --topbar-h: 80px;
+                    --topbar-h: 72px;
                     --text-main: #0f172a;
                     --text-muted: #64748b;
                     --border: #e2e8f0;
@@ -39,6 +39,8 @@ const Topbar = () => {
 
                 .topbar {
                     height: var(--topbar-h);
+                    min-height: var(--topbar-h);
+                    max-height: var(--topbar-h);
                     background: #ffffff;
                     border-bottom: 1px solid var(--border);
                     display: flex;
@@ -49,7 +51,7 @@ const Topbar = () => {
                     top: 0;
                     z-index: 40;
                     box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-                    transition: height 0.2s ease;
+                    flex-shrink: 0;
                 }
 
                 .topbar-left {
