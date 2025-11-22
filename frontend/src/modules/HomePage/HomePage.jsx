@@ -202,7 +202,7 @@ export default function HomePage() {
             <p>Payments made simple — clear, fast and secure tracking.</p>
           </div>
           <div className="header-actions">
-            <Link to="/payments/new" className="btn btn-primary">
+            <Link to="/payments" className="btn btn-primary">
               <Icons.Plus /> New Payment
             </Link>
           </div>
