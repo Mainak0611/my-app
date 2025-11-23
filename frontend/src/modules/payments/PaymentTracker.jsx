@@ -1,8 +1,9 @@
-import { useEffect, useState, useMemo } from "react";
+// frontend/src/components/PaymentTracker.jsx
+import React, { useEffect, useState, useMemo } from "react";
 import api from "../../lib/api";
-import { 
-    formatDateForDisplay, 
-    getStatusDisplay 
+import {
+  formatDateForDisplay,
+  getStatusDisplay
 } from "./PaymentUtils.js";
 
 function PaymentTracker() {
@@ -10,20 +11,20 @@ function PaymentTracker() {
   const [loading, setLoading] = useState(true);
   const [file, setFile] = useState(null);
   const [uploadMessage, setUploadMessage] = useState({ type: null, text: '' });
-  
+
   // --- FILTER STATES ---
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMonth, setFilterMonth] = useState('ALL'); // NEW: Month Filter
-  const [filterStatus, setFilterStatus] = useState('ALL'); 
-  const [sortOrder, setSortOrder] = useState('none'); 
-  
+  const [filterStatus, setFilterStatus] = useState('ALL');
+  const [sortOrder, setSortOrder] = useState('none');
+
   // State for the tracking modal
   const [managePaymentId, setManagePaymentId] = useState(null);
   const [managePaymentIndex, setManagePaymentIndex] = useState(null);
   const [trackingHistory, setTrackingHistory] = useState([]);
   const [newRemark, setNewRemark] = useState('');
   const [newDate, setNewDate] = useState('');
-  
+
   // Delete Confirmation Modal
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
@@ -31,14 +32,83 @@ function PaymentTracker() {
   const ALL_HEADERS = ["ID", "Party", "Month", "Year", "Contact", "Status", "Dates", "Last Activity", "Remark", "Action"];
   const DATA_KEYS = ["id", "party", "month", "year", "contact_no", "payment_status", "date_count", "latest_payment", "latest_remark", "Action"];
 
-  // Fetch payments
+  // ---------------------------
+  // Utility: normalize single payment item (and normalize latest_payment reliably)
+  const normalizePaymentItem = (item = {}) => {
+    // latest_payment may come as:
+    // - "YYYY-MM-DD" (date-only) OR
+    // - "2025-11-23T18:30:00.000Z" (ISO)
+    // We'll convert to a JS Date object (local midnight for date-only strings)
+    let latest = item.latest_payment ?? null;
+    let latestDate = null;
+
+    if (latest) {
+      try {
+        if (typeof latest === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(latest)) {
+          // date-only -> treat as local midnight
+          latestDate = new Date(`${latest}T00:00:00`);
+          if (Number.isNaN(latestDate.getTime())) latestDate = null;
+        } else {
+          // try parse as ISO / timestamp string
+          const parsed = new Date(latest);
+          latestDate = Number.isNaN(parsed.getTime()) ? null : parsed;
+        }
+      } catch (e) {
+        latestDate = null;
+      }
+    }
+
+    return {
+      ...item,
+      latest_payment: latestDate, // Date object or null
+      payment_status: (item.payment_status || '').toString().trim().toUpperCase(),
+      contact_no: item.contact_no != null ? String(item.contact_no) : '',
+    };
+  };
+
+  // Helper: compare two dates by year/month/day (local)
+  const isSameDay = (a, b) => {
+    if (!a || !b) return false;
+    try {
+      const da = (a instanceof Date) ? a : new Date(a);
+      const db = (b instanceof Date) ? b : new Date(b);
+      if (Number.isNaN(da.getTime()) || Number.isNaN(db.getTime())) return false;
+      return da.getFullYear() === db.getFullYear()
+        && da.getMonth() === db.getMonth()
+        && da.getDate() === db.getDate();
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const isToday = (dateLike) => {
+    return isSameDay(dateLike, new Date());
+  };
+
+  // Fetch payments (robust to shapes like res.data or res.data.data)
   const fetchPayments = async () => {
     setLoading(true);
     try {
       const res = await api.get("/api/payments");
-      setPayments(res.data);
+
+      let payload = [];
+      if (Array.isArray(res.data)) {
+        payload = res.data;
+      } else if (Array.isArray(res.data?.data)) {
+        payload = res.data.data;
+      } else if (res.data?.rows && Array.isArray(res.data.rows)) {
+        payload = res.data.rows;
+      } else {
+        const values = Object.values(res.data || {});
+        const arr = values.find(v => Array.isArray(v));
+        payload = arr || [];
+      }
+
+      const normalized = payload.map(normalizePaymentItem);
+      setPayments(normalized);
     } catch (err) {
-      console.error("Error fetching data:", err);
+      console.error("Error fetching payments:", err);
+      setPayments([]);
     } finally {
       setLoading(false);
     }
@@ -52,7 +122,7 @@ function PaymentTracker() {
   const availableMonths = useMemo(() => {
     const unique = new Set();
     payments.forEach(p => {
-      if(p.month && p.year) {
+      if (p.month && p.year) {
         unique.add(`${p.month} ${p.year}`);
       }
     });
@@ -62,11 +132,13 @@ function PaymentTracker() {
   // --- FILTERING LOGIC ---
   const filteredPayments = useMemo(() => {
     let list = payments;
-    
+
+    const getStatus = (p) => (p && p.payment_status ? String(p.payment_status).trim().toUpperCase() : '');
+
     // 1. Search Term Filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      list = list.filter(p => 
+      list = list.filter(p =>
         (p.party && String(p.party).toLowerCase().includes(term)) ||
         (p.contact_no && String(p.contact_no).toLowerCase().includes(term))
       );
@@ -77,25 +149,43 @@ function PaymentTracker() {
       list = list.filter(p => `${p.month} ${p.year}` === filterMonth);
     }
 
-    // 3. Status Filter
+    // 3. Status Filter (use normalized values)
     if (filterStatus !== 'ALL') {
-      list = list.filter(p => p.payment_status === filterStatus);
+      if (filterStatus === 'PENDING') {
+        list = list.filter(p => {
+          const s = getStatus(p);
+          return s === 'PENDING' || s === 'PARTIAL';
+        });
+      } else {
+        const desired = String(filterStatus).trim().toUpperCase();
+        list = list.filter(p => {
+          const s = getStatus(p);
+          return s === desired;
+        });
+      }
     }
 
-    // 4. Manual Sorting Override (Backend already does basic sort)
+    // 4. Manual Sorting Override
     if (sortOrder !== 'none') {
       list = [...list].sort((a, b) => {
         const dateA = a.latest_payment;
         const dateB = b.latest_payment;
         if (!dateA && !dateB) return 0;
-        if (!dateA) return 1; 
-        if (!dateB) return -1; 
-        
+        if (!dateA) return 1;
+        if (!dateB) return -1;
         const timeA = new Date(dateA).getTime();
         const timeB = new Date(dateB).getTime();
         return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
       });
+    } else {
+      // default: preserve DB insertion order by id ascending
+      list = [...list].sort((a, b) => {
+        const ida = Number(a?.id ?? 0);
+        const idb = Number(b?.id ?? 0);
+        return ida - idb;
+      });
     }
+
     return list;
   }, [payments, searchTerm, filterMonth, filterStatus, sortOrder]);
 
@@ -103,15 +193,20 @@ function PaymentTracker() {
   const fetchTrackingHistory = async (paymentId) => {
     try {
       const res = await api.get(`/api/payments/tracking/${paymentId}`);
-      setTrackingHistory(res.data);
+      let payload = [];
+      if (Array.isArray(res.data)) payload = res.data;
+      else if (Array.isArray(res.data?.data)) payload = res.data.data;
+      else payload = Array.isArray(res.data) ? res.data : [];
+      setTrackingHistory(payload);
     } catch (err) {
       console.error("Failed to fetch tracking history:", err);
+      setTrackingHistory([]);
     }
   };
 
   const openManageModal = (paymentId, displayIndex) => {
     setManagePaymentId(paymentId);
-    setManagePaymentIndex(displayIndex); 
+    setManagePaymentIndex(displayIndex);
     fetchTrackingHistory(paymentId);
     setNewRemark('');
     setNewDate('');
@@ -122,7 +217,7 @@ function PaymentTracker() {
     setManagePaymentIndex(null);
     setTrackingHistory([]);
   };
-  
+
   const handleAddTrackingEntry = async (e) => {
     e.preventDefault();
     if (!newDate) {
@@ -130,14 +225,14 @@ function PaymentTracker() {
       return;
     }
     try {
-      await api.post(`/api/payments/tracking/${managePaymentId}`, { 
-        entry_date: newDate, 
+      await api.post(`/api/payments/tracking/${managePaymentId}`, {
+        entry_date: newDate,
         remark: newRemark || null
       });
-      
-      await fetchTrackingHistory(managePaymentId); 
-      fetchPayments(); 
-      
+
+      await fetchTrackingHistory(managePaymentId);
+      await fetchPayments();
+
       setNewRemark('');
       setNewDate('');
     } catch (err) {
@@ -145,20 +240,22 @@ function PaymentTracker() {
       alert("Failed to save entry.");
     }
   };
-  
+
   const handleUpdatePaymentStatus = async (newStatus) => {
     if (!newStatus || !managePaymentId) return;
-    try {
-        await api.patch(`/api/payments/${managePaymentId}/status`, { newStatus: newStatus });
-        
-        setPayments(prev => prev.map(p => 
-            p.id === managePaymentId ? { ...p, payment_status: newStatus } : p
-        ));
+    const normalizedNewStatus = String(newStatus).trim().toUpperCase();
 
-        fetchPayments(); 
+    try {
+      await api.patch(`/api/payments/${managePaymentId}/status`, { newStatus: normalizedNewStatus });
+
+      setPayments(prev => prev.map(p =>
+        p.id === managePaymentId ? { ...p, payment_status: normalizedNewStatus } : p
+      ));
+
+      await fetchPayments();
     } catch (err) {
-        console.error("Failed to update status:", err);
-        alert("Failed to update payment status.");
+      console.error("Failed to update status:", err);
+      alert("Failed to update payment status.");
     }
   };
 
@@ -171,20 +268,23 @@ function PaymentTracker() {
     }
     setUploadMessage({ type: 'info', text: 'Uploading & creating monthly reminders...' });
     const formData = new FormData();
-    formData.append('csvFile', file); 
+    formData.append('csvFile', file);
 
     try {
       const token = localStorage.getItem('userToken');
-      if (!token) return; 
-      
+      if (!token) return;
+
       const res = await api.post("/api/payments/upload", formData, {
         headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${token}` }
       });
-      setUploadMessage({ type: 'success', text: res.data.message });
-      setFile(null); 
-      document.getElementById('file-input').value = null; 
-      fetchPayments(); 
+
+      setUploadMessage({ type: 'success', text: res.data?.message || 'Uploaded successfully' });
+      setFile(null);
+      const fileInput = document.getElementById('file-input');
+      if (fileInput) fileInput.value = null;
+      await fetchPayments();
     } catch (err) {
+      console.error("Upload error:", err);
       const msg = err.response?.data?.error || 'Upload failed.';
       setUploadMessage({ type: 'error', text: msg });
     }
@@ -194,15 +294,16 @@ function PaymentTracker() {
     setIsDeleteModalOpen(false);
     setUploadMessage({ type: 'info', text: 'Deleting all history...' });
     try {
-      const res = await api.delete("/api/payments"); 
-      setUploadMessage({ type: 'success', text: res.data.message });
-      fetchPayments(); 
+      const res = await api.delete("/api/payments");
+      setUploadMessage({ type: 'success', text: res.data?.message || 'Deleted all payments' });
+      await fetchPayments();
     } catch (err) {
+      console.error("Delete all error:", err);
       const msg = err.response?.data?.error || 'Delete failed.';
       setUploadMessage({ type: 'error', text: msg });
     }
   };
-  
+
   const clearAllFilters = () => {
     setSearchTerm('');
     setFilterMonth('ALL');
@@ -248,19 +349,34 @@ function PaymentTracker() {
         .btn-primary { background: var(--primary); color: white; }
         .btn-danger { background: #fff1f2; color: var(--danger); border: 1px solid #fecdd3; }
         .btn-outline { background: white; border: 1px solid var(--border); color: var(--text-main); }
-        
+
         .filter-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; align-items: end; }
         .form-label { font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
         .form-input, .form-select { padding: 10px; border: 1px solid var(--border); border-radius: 6px; width: 100%; }
-        
+
         .table-container { overflow-x: auto; border-radius: 8px; border: 1px solid var(--border); }
         .data-table { width: 100%; border-collapse: collapse; font-size: 15px; text-align: left; }
         .data-table th { background: #f8fafc; color: var(--text-muted); font-weight: 600; padding: 12px 16px; font-size: 12px; text-transform: uppercase; }
         .data-table td { padding: 8px 16px; border-bottom: 1px solid var(--border); }
         .status-pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
-        
+
         .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(15, 23, 42, 0.6); display: flex; justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: white; padding: 32px; border-radius: 16px; width: 90%; max-width: 600px; }
+        .modal-content { background: white; padding: 32px; border-radius: 16px; width: 90%; max-width: 600px; position: relative; }
+        .modal-close-btn {
+          width: 36px;
+          height: 36px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border-radius: 8px;
+          border: 1px solid var(--border);
+          background: #ffffff;
+          color: var(--text-main);
+          cursor: pointer;
+          box-shadow: 0 1px 4px rgba(2,6,23,0.06);
+        }
+        /* highlight row for today's latest_payment */
+        .row-highlight { background: var(--highlight-bg); }
       `}</style>
 
       <h1 className="page-title">Payment Reminders</h1>
@@ -268,20 +384,20 @@ function PaymentTracker() {
       {/* --- UPLOAD SECTION --- */}
       <div className="card">
         <form onSubmit={handleUpload} className="upload-area">
-          <div style={{flex: 1, display: 'flex', gap: '12px', alignItems: 'center'}}>
-            <label className="form-label">New Month Sheet</label>
-            <input 
+          <div style={{ flex: 1, display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <label className="form-label" style={{ marginRight: 8 }}>New Month Sheet</label>
+            <input
               id="file-input"
-              type="file" 
-              accept=".csv, .xlsx" 
-              onChange={(e) => setFile(e.target.files[0])} 
+              type="file"
+              accept=".csv, .xlsx"
+              onChange={(e) => setFile(e.target.files[0])}
               className="file-input"
             />
             <button type="submit" disabled={!file || uploadMessage.type === 'info'} className="btn btn-primary">
               <Icons.Upload /> {uploadMessage.type === 'info' ? 'Processing...' : 'Upload & Append'}
             </button>
           </div>
-          
+
           <button type="button" onClick={() => setIsDeleteModalOpen(true)} className="btn btn-danger">
             <Icons.Trash /> Clear All History
           </button>
@@ -335,7 +451,8 @@ function PaymentTracker() {
               onChange={(e) => setFilterStatus(e.target.value)}
             >
               <option value="ALL">All Statuses</option>
-              <option value="PENDING">Pending Only</option>
+              <option value="PENDING">Pending Only (includes Partial)</option>
+              <option value="PARTIAL">Partial Only</option>
               <option value="PAID">Paid Only</option>
             </select>
           </div>
@@ -347,7 +464,7 @@ function PaymentTracker() {
               value={sortOrder}
               onChange={(e) => setSortOrder(e.target.value)}
             >
-              <option value="none">Default (Pending First)</option>
+              <option value="none">Default</option>
               <option value="asc">Last Payment (Oldest)</option>
               <option value="desc">Last Payment (Newest)</option>
             </select>
@@ -356,57 +473,65 @@ function PaymentTracker() {
       </div>
 
       {/* --- TABLE SECTION --- */}
-      <div className="card" style={{padding: 0, overflow: 'hidden'}}>
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         {loading ? (
-          <div style={{padding: '40px', textAlign: 'center'}}>Loading...</div>
+          <div style={{ padding: '40px', textAlign: 'center' }}>Loading...</div>
         ) : (
-          <div className="table-container" style={{border: 'none', borderRadius: 0}}>
+          <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
             <table className="data-table">
               <thead>
                 <tr>
                   {ALL_HEADERS.map((header, index) => (
-                    <th key={index}>{header}</th> 
+                    <th key={index}>{header}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {filteredPayments.map((p, index) => (
-                  <tr key={p.id}>
-                    {DATA_KEYS.map((key) => {
-                      if (key === 'id') return <td key={key} style={{color: '#94a3b8'}}>#{index + 1}</td>;
-                      
-                      // Month & Year Columns
-                      if (key === 'month') return <td key={key} style={{fontWeight: 500}}>{p.month}</td>;
-                      if (key === 'year') return <td key={key} style={{color: '#64748b'}}>{p.year}</td>;
+                {filteredPayments.map((p, index) => {
+                  // highlight row if latest_payment is today
+                  const highlight = isToday(p.latest_payment);
+                  return (
+                    <tr key={p.id ?? index} className={highlight ? 'row-highlight' : ''}>
+                      {DATA_KEYS.map((key) => {
+                        if (key === 'id') return <td key={key} style={{ color: '#94a3b8' }}>#{index + 1}</td>;
 
-                      if (key === 'payment_status') {
-                        const statusData = getStatusDisplay(p[key]);
-                        return (
-                          <td key={key}>
-                            <span className="status-pill" style={{backgroundColor: statusData.bgColor, color: statusData.color}}>
-                              {statusData.text}
-                            </span>
-                          </td>
-                        );
-                      }
-                      
-                      if (key === 'Action') {
-                        return (
-                          <td key={key}>
-                            <button onClick={() => openManageModal(p.id, index + 1)} className="btn btn-outline" style={{padding: '4px 12px', fontSize: '12px'}}>
-                              Manage
-                            </button>
-                          </td>
-                        );
-                      }
-                      
-                      if (key === 'latest_payment') return <td key={key}>{formatDateForDisplay(p[key])}</td>;
-                      if (key === 'latest_remark') return <td key={key} style={{maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>{p[key] || '-'}</td>;
+                        // Month & Year Columns
+                        if (key === 'month') return <td key={key} style={{ fontWeight: 500 }}>{p.month || '-'}</td>;
+                        if (key === 'year') return <td key={key} style={{ color: '#64748b' }}>{p.year || '-'}</td>;
 
-                      return <td key={key}>{p[key]}</td>;
-                    })}
-                  </tr>
-                ))}
+                        if (key === 'payment_status') {
+                          const statusData = getStatusDisplay(p[key]);
+                          return (
+                            <td key={key}>
+                              <span className="status-pill" style={{ backgroundColor: statusData.bgColor, color: statusData.color }}>
+                                {statusData.text}
+                              </span>
+                            </td>
+                          );
+                        }
+
+                        if (key === 'Action') {
+                          return (
+                            <td key={key}>
+                              <button onClick={() => openManageModal(p.id, index + 1)} className="btn btn-outline" style={{ padding: '4px 12px', fontSize: '12px' }}>
+                                Manage
+                              </button>
+                            </td>
+                          );
+                        }
+
+                        if (key === 'latest_payment') {
+                          // formatDateForDisplay should accept Date or string; if it expects string, pass ISO
+                          return <td key={key}>{formatDateForDisplay(p[key] instanceof Date ? p[key] : p[key])}</td>;
+                        }
+                        if (key === 'latest_remark') return <td key={key} style={{ maxWidth: '150px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p[key] || '-'}</td>;
+
+                        // default render for simple fields (party, contact_no, date_count)
+                        return <td key={key}>{p[key] != null && p[key] !== '' ? p[key] : '-'}</td>;
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -417,59 +542,74 @@ function PaymentTracker() {
       {managePaymentId !== null && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <div style={{display:'flex', justifyContent:'space-between', marginBottom:'20px'}}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', alignItems: 'center' }}>
               <h2>Manage Payment</h2>
-              <button onClick={closeManageModal} style={{background:'none', border:'none', fontSize:'24px', cursor:'pointer'}}>&times;</button>
+              <button
+                onClick={closeManageModal}
+                className="modal-close-btn"
+                aria-label="Close"
+                title="Close"
+              >
+                &times;
+              </button>
             </div>
-            
-            <form onSubmit={handleAddTrackingEntry} style={{display:'flex', gap:'10px', marginBottom:'20px'}}>
+
+            <form onSubmit={handleAddTrackingEntry} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
               <input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} className="form-input" required />
               <input type="text" value={newRemark} onChange={(e) => setNewRemark(e.target.value)} placeholder="Remark" className="form-input" />
               <button type="submit" className="btn btn-primary"><Icons.Plus /></button>
             </form>
 
-            <div style={{marginBottom:'20px'}}>
-               <label className="form-label" style={{marginBottom:'8px', display:'block'}}>Mark Status</label>
-               <div style={{display:'flex', gap:'10px'}}>
-                  {['PENDING', 'PARTIAL', 'PAID'].map(status => (
-                    <button 
+            <div style={{ marginBottom: '20px' }}>
+              <label className="form-label" style={{ marginBottom: '8px', display: 'block' }}>Mark Status</label>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {['PENDING', 'PARTIAL', 'PAID'].map(status => {
+                  const currently = payments.find(p => p.id === managePaymentId)?.payment_status;
+                  const isActive = currently === status;
+                  return (
+                    <button
                       key={status}
                       type="button"
                       onClick={() => handleUpdatePaymentStatus(status)}
                       className="btn"
                       style={{
                         flex: 1,
-                        background: payments.find(p => p.id === managePaymentId)?.payment_status === status ? '#0f172a' : '#f1f5f9',
-                        color: payments.find(p => p.id === managePaymentId)?.payment_status === status ? 'white' : 'black'
+                        background: isActive ? 'var(--primary)' : '#f1f5f9',
+                        color: isActive ? 'white' : 'black'
                       }}
                     >
                       {status}
                     </button>
-                  ))}
-               </div>
+                  );
+                })}
+              </div>
             </div>
 
-            <div style={{maxHeight:'200px', overflowY:'auto', borderTop:'1px solid #e2e8f0', paddingTop:'10px'}}>
-              {trackingHistory.map((entry) => (
-                <div key={entry.id} style={{padding:'8px', borderBottom:'1px solid #f1f5f9'}}>
-                  <div style={{fontWeight:500}}>{entry.remark || 'Update'}</div>
-                  <div style={{fontSize:'12px', color:'#64748b'}}>
-                     Date: {formatDateForDisplay(entry.actual_payment)}
+            <div style={{ maxHeight: '200px', overflowY: 'auto', borderTop: '1px solid #e2e8f0', paddingTop: '10px' }}>
+              {trackingHistory.length === 0 ? (
+                <div style={{ color: '#64748b' }}>No tracking history yet.</div>
+              ) : (
+                trackingHistory.map((entry) => (
+                  <div key={entry.id ?? `${entry.entry_date}-${entry.remark}`} style={{ padding: '8px', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ fontWeight: 500 }}>{entry.remark || 'Update'}</div>
+                    <div style={{ fontSize: '12px', color: '#64748b' }}>
+                      Date: {formatDateForDisplay(entry.actual_payment || entry.entry_date)}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
       )}
-      
+
       {/* --- DELETE CONFIRM MODAL --- */}
       {isDeleteModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{textAlign:'center', maxWidth:'400px'}}>
-            <h2 style={{color: '#ef4444'}}>Warning</h2>
+          <div className="modal-content" style={{ textAlign: 'center', maxWidth: '400px' }}>
+            <h2 style={{ color: '#ef4444' }}>Warning</h2>
             <p>This will permanently delete ALL payment history for all months.</p>
-            <div style={{display:'flex', gap:'10px', justifyContent:'center', marginTop:'20px'}}>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', marginTop: '20px' }}>
               <button className="btn btn-outline" onClick={() => setIsDeleteModalOpen(false)}>Cancel</button>
               <button className="btn btn-danger" onClick={handleDeleteAll}>Confirm Delete</button>
             </div>
@@ -483,7 +623,7 @@ function PaymentTracker() {
 const Icons = {
   Upload: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>,
   Trash: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>,
-  Plus: () => <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  Plus: () => <svg width="36" height="16" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 };
 
 export default PaymentTracker;

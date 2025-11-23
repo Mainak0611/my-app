@@ -1,10 +1,11 @@
+// controllers/paymentsController.js
 import pool from "../../config/db.js";
 import fs from "fs";
 import XLSX from "xlsx";
 
 // Mapping Excel Columns to DB Columns
 const EXCEL_TO_SQL_MAP = [
-  'party', 
+  'party',
   'contact_no'
 ];
 
@@ -13,27 +14,28 @@ export const getPayments = async (req, res) => {
   const userId = req.user.id;
 
   // Fetches payments including the Month/Year columns
+  // NOTE: ORDER BY changed to p.id ASC so frontend will receive rows in DB insertion order
+  // latest_payment returned as a date-only string (YYYY-MM-DD) to avoid timezone shifts
   const sql = `
     SELECT
       p.id,
       p.party,
       p.contact_no,
       p.payment_status,
-      p.month, 
+      p.month,
       p.year,
       p.user_id,
       p.created_at,
       p.date_count,
-      (SELECT payment_date FROM payment_tracking WHERE payment_id = p.id ORDER BY created_at DESC LIMIT 1) AS latest_payment,
+      (SELECT to_char(payment_date::date, 'YYYY-MM-DD')
+         FROM payment_tracking
+        WHERE payment_id = p.id
+        ORDER BY created_at DESC
+        LIMIT 1) AS latest_payment,
       (SELECT remark FROM payment_tracking WHERE payment_id = p.id ORDER BY created_at DESC LIMIT 1) AS latest_remark
     FROM payments p
     WHERE p.user_id = $1
-    ORDER BY 
-      CASE WHEN p.payment_status = 'PENDING' THEN 1 
-           WHEN p.payment_status = 'PARTIAL' THEN 2 
-           ELSE 3 END ASC, -- Puts PENDING first
-      p.year ASC,          -- Then Oldest Year
-      p.id ASC;            -- Then Creation Order
+    ORDER BY p.id ASC;
   `;
 
   try {
@@ -49,7 +51,7 @@ export const getPayments = async (req, res) => {
 export const deleteAllPayments = async (req, res) => {
   const userId = req.user.id;
 
-  // WARNING: This deletes EVERYTHING (History included). 
+  // WARNING: This deletes EVERYTHING (History included).
   const sql = "DELETE FROM payments WHERE user_id = $1";
   try {
     const result = await pool.query(sql, [userId]);
@@ -117,7 +119,7 @@ export const uploadCSV = async (req, res) => {
           record[sqlKey] = rawValue === "" ? null : rawValue;
         }
       });
-      
+
       if (!record.party) return null;
       return record;
     }).filter(r => r !== null);
@@ -149,25 +151,25 @@ export const uploadCSV = async (req, res) => {
       `SELECT party FROM payments WHERE user_id = $1 AND month = $2 AND year = $3`,
       [userId, currentMonth, currentYear]
     );
-    
-    // Create a "Bag" of existing parties. 
+
+    // Create a "Bag" of existing parties.
     // If DB has ['PartyA', 'PartyA'], this array will be ['PartyA', 'PartyA'].
     const existingPartiesPool = existingRes.rows.map(r => r.party);
 
     const rowsToInsert = [];
-    
+
     // 2. Iterate through Excel records
     for (const rec of records) {
       // Check if this party exists in our pool
       const matchIndex = existingPartiesPool.indexOf(rec.party);
 
       if (matchIndex !== -1) {
-        // FOUND: It exists in DB. 
+        // FOUND: It exists in DB.
         // Remove one instance from the pool to "mark it as seen".
         // We DO NOT insert this record because it's already there.
         existingPartiesPool.splice(matchIndex, 1);
       } else {
-        // NOT FOUND (or all existing instances used up): 
+        // NOT FOUND (or all existing instances used up):
         // This is a NEW copy (or a new party entirely).
         // We MUST insert this.
         rowsToInsert.push(rec);
@@ -183,11 +185,11 @@ export const uploadCSV = async (req, res) => {
 
       for (const rec of rowsToInsert) {
         const singleRowPlaceholders = [];
-        
+
         // 1. Party
         values.push(rec.party);
         singleRowPlaceholders.push(`$${paramIndex++}`);
-        
+
         // 2. Contact
         values.push(rec.contact_no);
         singleRowPlaceholders.push(`$${paramIndex++}`);
@@ -195,7 +197,7 @@ export const uploadCSV = async (req, res) => {
         // 3. Status
         values.push('PENDING');
         singleRowPlaceholders.push(`$${paramIndex++}`);
-        
+
         // 4. User ID
         values.push(userId);
         singleRowPlaceholders.push(`$${paramIndex++}`);
@@ -234,7 +236,7 @@ export const uploadCSV = async (req, res) => {
 // --- 4. ADD TRACKING ENTRY ---
 export const addTrackingEntry = async (req, res) => {
   const { paymentId } = req.params;
-  const { entry_date, remark } = req.body; 
+  const { entry_date, remark } = req.body;
   const userId = req.user.id;
 
   if (!entry_date && !remark) {
@@ -252,7 +254,7 @@ export const addTrackingEntry = async (req, res) => {
       VALUES ($1, $2, $3)
       RETURNING id;
     `;
-    
+
     const { rows } = await pool.query(insertSql, [paymentId, entry_date || null, remark || null]);
     res.status(201).json({ message: "Tracking entry added successfully.", id: rows[0].id });
   } catch (err) {

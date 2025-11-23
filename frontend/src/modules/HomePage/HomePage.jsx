@@ -9,34 +9,108 @@ export default function HomePage() {
     { id: 2, label: "Pending", value: "0" },
   ]);
   
-  // State for "Due Today" table
+  // State for "Due Today" and "Past Due" tables
   const [todaysPayments, setTodaysPayments] = useState([]);
+  const [pastDuePayments, setPastDuePayments] = useState([]);
   
   const [loading, setLoading] = useState(true);
+
+  // Robust helper to extract a YYYY-MM-DD string from incoming values
+  const extractDateString = (val) => {
+    if (!val) return null;
+    // If it's a Date object
+    if (val instanceof Date && !Number.isNaN(val.getTime())) {
+      const y = val.getFullYear();
+      const m = String(val.getMonth() + 1).padStart(2, '0');
+      const d = String(val.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    // If it's a string, try to read first 10 chars (YYYY-MM-DD) if present
+    const s = String(val).trim();
+    const maybeDate = s.substring(0, 10);
+    // Basic YYYY-MM-DD pattern check
+    if (/^\d{4}-\d{2}-\d{2}$/.test(maybeDate)) return maybeDate;
+    // fallback: try to parse whole string and derive local YYYY-MM-DD
+    const parsed = new Date(s);
+    if (!Number.isNaN(parsed.getTime())) {
+      const y = parsed.getFullYear();
+      const m = String(parsed.getMonth() + 1).padStart(2, '0');
+      const d = String(parsed.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    return null;
+  };
+
+  // Compare two YYYY-MM-DD strings (or date-likes) by local date (no time)
+  const isSameLocalDate = (dateLikeA, dateLikeB) => {
+    const a = extractDateString(dateLikeA);
+    const b = extractDateString(dateLikeB);
+    if (!a || !b) return false;
+    return a === b;
+  };
+
+  // Check if dateLike is before today's local date
+  const isBeforeTodayLocal = (dateLike) => {
+    const ds = extractDateString(dateLike);
+    if (!ds) return false;
+    const [y, m, d] = ds.split("-").map(Number);
+    const candidate = new Date(y, m - 1, d);
+    const today = new Date();
+    const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    return candidate.getTime() < t.getTime();
+  };
 
   // Fetch and Calculate Data
   useEffect(() => {
     const fetchData = async () => {
       try {
         const res = await api.get("/api/payments");
-        const data = res.data;
+        // support different response shapes
+        let data = [];
+        if (Array.isArray(res.data)) data = res.data;
+        else if (Array.isArray(res.data?.data)) data = res.data.data;
+        else if (res.data?.rows && Array.isArray(res.data.rows)) data = res.data.rows;
+        else {
+          const vals = Object.values(res.data || {});
+          const arr = vals.find(v => Array.isArray(v));
+          data = arr || [];
+        }
 
         // 1. Total & Pending Counts
         const totalCount = data.length;
-        const pendingCount = data.filter(p => p.payment_status === 'PENDING').length;
+        const pendingCount = data.filter(p => {
+          const s = (p.payment_status || "").toString().trim().toUpperCase();
+          return s === 'PENDING';
+        }).length;
 
-        // 2. Filter for TODAY'S PAYMENTS (FIXED: Uses Local Time)
+        // Today's date string in YYYY-MM-DD (local)
         const now = new Date();
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, '0');
         const day = String(now.getDate()).padStart(2, '0');
-        const todayStr = `${year}-${month}-${day}`; // e.g. "2025-11-23"
+        const todayStr = `${year}-${month}-${day}`; // e.g. "2025-11-24"
 
-        const dueToday = data.filter(p => {
-          if (!p.latest_payment) return false; 
-          // Extract YYYY-MM-DD from the record string safely
-          const recordDateStr = String(p.latest_payment).substring(0, 10);
-          return recordDateStr === todayStr;
+        // 2. Build today's and past-due arrays (defensive parsing)
+        const dueToday = [];
+        const pastDue = [];
+
+        data.forEach(p => {
+          // latest_payment may be null, "YYYY-MM-DD" or an ISO string
+          const dateStr = extractDateString(p.latest_payment);
+          if (!dateStr) return; // skip rows without a date
+          
+          if (dateStr === todayStr) {
+            dueToday.push(p);
+          } else {
+            // if date < today -> past due
+            const [y,m,d] = dateStr.split('-').map(Number);
+            const dt = new Date(y, m - 1, d);
+            const t = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            if (dt.getTime() < t.getTime()) {
+              pastDue.push(p);
+            }
+            // else (future) we ignore for this UI
+          }
         });
 
         // Update States
@@ -45,6 +119,7 @@ export default function HomePage() {
           { id: 2, label: "Pending", value: pendingCount.toString() },
         ]);
         setTodaysPayments(dueToday);
+        setPastDuePayments(pastDue);
 
       } catch (err) {
         console.error("Error fetching dashboard data:", err);
@@ -80,14 +155,15 @@ export default function HomePage() {
           background-color: var(--bg-body);
           min-height: 100vh;
           color: var(--text-main);
-          padding: 40px 20px;
+          padding: 40px 24px; /* Slightly increased side padding */
           position: relative;
           overflow-y: auto;
         }
 
         .wrapper {
-          max-width: 1200px;
-          margin: 0 auto;
+          width: 100%;       /* CHANGED: Fill the available width */
+          max-width: none;   /* CHANGED: Removed the 1200px limit */
+          margin: 0;         /* CHANGED: Reset auto margins */
           position: relative;
           z-index: 1;
         }
@@ -122,14 +198,13 @@ export default function HomePage() {
 
         .btn-primary {
           background-color: var(--primary);
-          color: white !important; /* Ensure text is white by default */
+          color: white !important;
           box-shadow: 0 2px 4px rgba(5, 150, 105, 0.2);
         }
         
-        /* FIXED HOVER: Darker Green BG + White Text */
         .btn-primary:hover { 
             background-color: var(--primary-hover); 
-            color: white !important; /* Force white text on hover */
+            color: white !important;
             transform: translateY(-1px); 
             box-shadow: 0 4px 6px rgba(5, 150, 105, 0.3);
         }
@@ -141,7 +216,10 @@ export default function HomePage() {
         .btn-sm-outline:hover { background: #f8fafc; }
 
         .main-grid {
-          display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 24px;
+          display: grid; 
+          grid-template-columns: 3fr 1fr; /* CHANGED: Gives more space to the main card */
+          gap: 24px; 
+          margin-bottom: 24px;
         }
         @media (max-width: 1024px) { .main-grid { grid-template-columns: 1fr; } }
 
@@ -154,7 +232,6 @@ export default function HomePage() {
           overflow: hidden;
         }
 
-        /* Hero Card */
         .hero-content { display: flex; gap: 20px; }
         .hero-icon {
           width: 48px; height: 48px;
@@ -176,7 +253,6 @@ export default function HomePage() {
         .stat-val { font-size: 20px; font-weight: 700; color: var(--text-main); }
         .stat-lbl { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
 
-        /* Quick Actions */
         .action-list { display: flex; flex-direction: column; gap: 8px; }
         .action-item {
           display: flex; justify-content: space-between; align-items: center;
@@ -193,11 +269,21 @@ export default function HomePage() {
         .action-text h4 { margin: 0; font-size: 14px; font-weight: 600; color: var(--text-main); }
         .action-text p { margin: 0; font-size: 12px; color: var(--text-muted); }
 
-        /* Updated Table Wrapper */
+        /* NEW: two-column area for Due Today and Past Due */
+        .two-col {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 16px;
+          margin-top: 16px;
+        }
+        @media (max-width: 900px) {
+          .two-col { grid-template-columns: 1fr; }
+        }
+
         .table-wrapper { 
             width: 100%; 
-            margin-top: 16px;
-            max-height: 1000px; 
+            margin-top: 12px;
+            max-height: 520px; 
             overflow-y: auto;
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -291,63 +377,119 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* --- NEW SECTION: PAYMENTS DUE TODAY --- */}
+        {/* --- NEW SECTION: DUE TODAY (left) & PAST DUE (right) --- */}
         <div className="card">
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-                <div>
-                    <h3 style={{ fontSize: '18px', margin: 0, fontWeight: 700 }}>Due Today</h3>
-                    <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
-                        Records scheduled for {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}
-                    </p>
-                </div>
-                {todaysPayments.length > 0 && <span className="status-pill" style={{background: '#dbeafe', color: '#1e40af'}}>
-                   {todaysPayments.length} Record{todaysPayments.length !== 1 ? 's' : ''}
-                </span>}
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12}}>
+            <div>
+              <h3 style={{ fontSize: '18px', margin: 0, fontWeight: 700 }}>Due Today</h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+                Records scheduled for {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {todaysPayments.length > 0 && (
+                <span className="status-pill" style={{background: '#dbeafe', color: '#1e40af'}}>
+                  {todaysPayments.length} Record{todaysPayments.length !== 1 ? 's' : ''}
+                </span>
+              )}
+              {pastDuePayments.length > 0 && (
+                <span className="status-pill" style={{background: '#fee2e2', color: '#991b1b'}}>
+                  {pastDuePayments.length} Past Due
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="two-col">
+            {/* Left: Due Today */}
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>Today</div>
+              <div className="table-wrapper">
+                {todaysPayments.length === 0 ? (
+                  <div className="empty-state">No payments scheduled for today.</div>
+                ) : (
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Party</th>
+                        <th>Contact</th>
+                        <th>Remark</th>
+                        <th>Status</th>
+                        <th style={{textAlign: 'right'}}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {todaysPayments.map(p => (
+                        <tr key={p.id}>
+                          <td style={{ fontWeight: 600 }}>{p.party}</td>
+                          <td>{p.contact_no || '-'}</td>
+                          <td style={{ maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-muted)' }}>
+                            {p.latest_remark || '-'}
+                          </td>
+                          <td>
+                            <span className="status-pill" style={{
+                              backgroundColor: p.payment_status === 'PAID' ? '#d1fae5' : p.payment_status === 'PARTIAL' ? '#ffedd5' : '#fee2e2',
+                              color: p.payment_status === 'PAID' ? '#065f46' : p.payment_status === 'PARTIAL' ? '#9a3412' : '#991b1b'
+                            }}>
+                              {p.payment_status}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <Link to="/payments" className="btn-sm-outline" style={{ textDecoration: 'none' }}>View</Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </div>
 
-            <div className="table-wrapper">
-                {todaysPayments.length === 0 ? (
-                    <div className="empty-state">
-                        No payments found for today.
-                    </div>
+            {/* Right: Past Due */}
+            <div>
+              <div style={{ fontWeight: 700, marginBottom: 8 }}>Past Due</div>
+              <div className="table-wrapper">
+                {pastDuePayments.length === 0 ? (
+                  <div className="empty-state">No past due records.</div>
                 ) : (
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Party Name</th>
-                                <th>Contact</th>
-                                <th>Remark</th>
-                                <th>Status</th>
-                                <th style={{textAlign: 'right'}}>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {todaysPayments.map((p) => (
-                                <tr key={p.id}>
-                                    <td style={{fontWeight: 600}}>{p.party}</td>
-                                    <td>{p.contact_no}</td>
-                                    <td style={{maxWidth: '200px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--text-muted)'}}>
-                                        {p.latest_remark || '-'}
-                                    </td>
-                                    <td>
-                                        <span className="status-pill" style={{
-                                            backgroundColor: p.payment_status === 'PAID' ? '#d1fae5' : p.payment_status === 'PARTIAL' ? '#ffedd5' : '#fee2e2',
-                                            color: p.payment_status === 'PAID' ? '#065f46' : p.payment_status === 'PARTIAL' ? '#9a3412' : '#991b1b'
-                                        }}>
-                                            {p.payment_status}
-                                        </span>
-                                    </td>
-                                    <td style={{textAlign: 'right'}}>
-                                        <Link to="/payments" className="btn-sm-outline" style={{textDecoration: 'none'}}>
-                                            View
-                                        </Link>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Party</th>
+                        <th>Contact</th>
+                        <th>Latest Date</th>
+                        <th>Status</th>
+                        <th style={{textAlign: 'right'}}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pastDuePayments.map(p => (
+                        <tr key={p.id}>
+                          <td style={{ fontWeight: 600 }}>{p.party}</td>
+                          <td>{p.contact_no || '-'}</td>
+                          <td style={{ color: 'var(--text-muted)' }}>
+                            {/* show the YYYY-MM-DD or formatted */}
+                            { (p.latest_payment ? String(p.latest_payment).substring(0,10) : '-') }
+                          </td>
+                          <td>
+                            <span className="status-pill" style={{
+                              backgroundColor: p.payment_status === 'PAID' ? '#d1fae5' : p.payment_status === 'PARTIAL' ? '#ffedd5' : '#fee2e2',
+                              color: p.payment_status === 'PAID' ? '#065f46' : p.payment_status === 'PARTIAL' ? '#9a3412' : '#991b1b'
+                            }}>
+                              {p.payment_status}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <Link to="/payments" className="btn-sm-outline" style={{ textDecoration: 'none' }}>View</Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
+              </div>
             </div>
+          </div>
         </div>
 
       </div>
