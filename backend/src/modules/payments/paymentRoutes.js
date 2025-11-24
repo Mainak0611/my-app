@@ -1,36 +1,46 @@
-// backend/src/modules/payments/paymentRoutes.js
-
+// routes/payments.js
 import express from 'express';
-// 🛑 THIS IS THE CORRECT PATH BASED ON YOUR FOLDER STRUCTURE 🛑
-import { protect } from '../../middleware/authMiddleware.js'; 
-
-import { 
-    getPayments, 
-    uploadCSV, 
-    deleteAllPayments, 
-    addTrackingEntry, 
-    getTrackingEntries, 
-    updatePaymentStatus 
+import {
+  getPayments,
+  deleteAllPayments,
+  uploadCSV,
+  addTrackingEntry,
+  getTrackingEntries,
+  updatePaymentStatus,
+  mergePayments,
+  updatePaymentDetails,
+  updateTrackingEntry,
+  deleteTrackingEntry,
+  getMergedPayments,
+  unmergePayment
 } from './paymentController.js';
 
-import { upload } from '../../config/multerConfig.js'; 
+import multer from 'multer';
+import { protect } from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
+const upload = multer({ dest: 'tmp/uploads/' });
 
-// 1. GET Payments (READ) - REQUIRES AUTHENTICATION
 router.get('/', protect, getPayments);
-
-// 2. POST Upload (CREATE) - REQUIRES AUTHENTICATION
+router.delete('/', protect, deleteAllPayments);
 router.post('/upload', protect, upload.single('csvFile'), uploadCSV);
 
-// 3. DELETE All (DELETE) - REQUIRES AUTHENTICATION
-router.delete('/', protect, deleteAllPayments);
-
-// 4. Tracking Routes - REQUIRES AUTHENTICATION
 router.post('/tracking/:paymentId', protect, addTrackingEntry);
 router.get('/tracking/:paymentId', protect, getTrackingEntries);
 
-// 5. Status Update - REQUIRES AUTHENTICATION
+// tracking entry update/delete
+router.patch('/tracking/entry/:id', protect, updateTrackingEntry);
+router.delete('/tracking/entry/:id', protect, deleteTrackingEntry);
+// status update
 router.patch('/:id/status', protect, updatePaymentStatus);
+
+// merge
+router.post('/merge', protect, mergePayments);
+
+// merged listing & unmerge
+router.get('/:id/merged', protect, getMergedPayments);
+router.patch('/:id/unmerge', protect, unmergePayment);
+// update main details
+router.patch('/:id/details', protect, updatePaymentDetails);
 
 export default router;
